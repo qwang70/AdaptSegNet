@@ -15,6 +15,8 @@ import os.path as osp
 import random
 from tensorboardX import SummaryWriter
 
+import pdb
+
 from model.deeplab_multi import DeeplabMulti
 from model.discriminator import FCDiscriminator
 from utils.loss import CrossEntropy2d
@@ -24,7 +26,7 @@ from dataset.cityscapes_dataset import cityscapesDataSet
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
 MODEL = 'DeepLab'
-BATCH_SIZE = 2
+BATCH_SIZE = 1
 ITER_SIZE = 1
 NUM_WORKERS = 4
 DATA_DIRECTORY = './data/GTA5'
@@ -206,6 +208,14 @@ def main():
 
     model_D2.train()
     model_D2.to(device)
+    
+    # pdb.set_trace()
+    import datetime
+    now_time = datetime.datetime.now()
+    args.snapshot_dir = SNAPSHOT_DIR + 'baseline_' + 'multi_' \
+        + str(NUM_STEPS) + '_seg{}'.format(args.lambda_seg) + '_adv1{}'.format(args.lambda_adv_target1)\
+        + '_adv2{}'.format(args.lambda_adv_target2) + '_bs{}'.format(BATCH_SIZE) + \
+        '_{}-{}-{}-{}'.format(now_time.month, now_time.day, now_time.hour, now_time.minute)
 
     if not os.path.exists(args.snapshot_dir):
         os.makedirs(args.snapshot_dir)
@@ -255,11 +265,10 @@ def main():
     target_label = 1
 
     # set up tensor board
-    if args.tensorboard:
-        if not os.path.exists(args.log_dir):
-            os.makedirs(args.log_dir)
+    if not os.path.exists(args.log_dir):
+        os.makedirs(args.log_dir)
 
-        writer = SummaryWriter(args.log_dir)
+    writer = SummaryWriter(args.log_dir)
 
     for i_iter in range(args.num_steps):
 
@@ -388,19 +397,18 @@ def main():
         optimizer_D1.step()
         optimizer_D2.step()
 
-        if args.tensorboard:
-            scalar_info = {
-                'loss_seg1': loss_seg_value1,
-                'loss_seg2': loss_seg_value2,
-                'loss_adv_target1': loss_adv_target_value1,
-                'loss_adv_target2': loss_adv_target_value2,
-                'loss_D1': loss_D_value1,
-                'loss_D2': loss_D_value2,
-            }
+        scalar_info = {
+            'loss_seg1': loss_seg_value1,
+            'loss_seg2': loss_seg_value2,
+            'loss_adv_target1': loss_adv_target_value1,
+            'loss_adv_target2': loss_adv_target_value2,
+            'loss_D1': loss_D_value1,
+            'loss_D2': loss_D_value2,
+        }
 
-            if i_iter % 10 == 0:
-                for key, val in scalar_info.items():
-                    writer.add_scalar(key, val, i_iter)
+        if i_iter % 10 == 0:
+            for key, val in scalar_info.items():
+                writer.add_scalar(key, val, i_iter)
 
         print('exp = {}'.format(args.snapshot_dir))
         print(
@@ -420,8 +428,7 @@ def main():
             torch.save(model_D1.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D1.pth'))
             torch.save(model_D2.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D2.pth'))
 
-    if args.tensorboard:
-        writer.close()
+    writer.close()
 
 
 if __name__ == '__main__':
