@@ -35,7 +35,6 @@ def CDAN(input_list, ad_net, entropy=None, coeff=None, random_layer=None):
         # not on the pixel level.
         # (2, 1, 180, 320)
         # ad_net here is the FCDiscriminatorTest
-        #TODO: I actually want the output to be (2,1,720,1280)
         ad_out = ad_net(op_out)
     else:
         random_out = random_layer.forward([feature, softmax_output])
