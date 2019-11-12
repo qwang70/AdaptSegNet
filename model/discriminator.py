@@ -12,14 +12,14 @@ class FCDiscriminatorTest(nn.Module):
 
         self.leaky_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
         #self.up_sample = nn.Upsample(scale_factor=32, mode='bilinear')
-        #self.sigmoid = nn.Sigmoid()
+        self.sigmoid = nn.Sigmoid()
 
 
     def forward(self, x):
         x = self.temp(x)
         x = self.classifier(x)
         #x = self.up_sample(x)
-        #x = self.sigmoid(x) 
+        x = self.sigmoid(x) 
 
         return x
 class FCDiscriminator(nn.Module):

@@ -374,8 +374,8 @@ def main():
             optimizer.step()
             print("after optimizer step")
             continue
+            # TODO: 这下面的代码还需要吗？
 
-            """
             D_out = model_D(F.softmax(pred_target))
             D_out1 = model_D1(F.softmax(pred_target1))
             D_out2 = model_D2(F.softmax(pred_target2))
@@ -390,13 +390,11 @@ def main():
             loss_adv_target2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
 
             loss = args.lambda_adv_target1 * loss_adv_target1 + args.lambda_adv_target2 * loss_adv_target2
-            # TODO: change the loss function
             loss = loss / args.iter_size
             loss.backward()
             loss_adv_target_value += loss_adv_target.item() / args.iter_size
             loss_adv_target_value1 += loss_adv_target1.item() / args.iter_size
             loss_adv_target_value2 += loss_adv_target2.item() / args.iter_size
-            """
 
             # train D
 
@@ -418,7 +416,6 @@ def main():
             D_out2 = model_D2(F.softmax(pred2))
             """
 
-            # TODO: 改
             loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(source_label).to(device))
 
             loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))

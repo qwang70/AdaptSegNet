@@ -22,10 +22,20 @@ def CDAN(input_list, ad_net, entropy=None, coeff=None, random_layer=None):
     softmax_output = input_list[1].detach()
     feature = input_list[0]
     if random_layer is None:
+        # original script
         #op_out = torch.bmm(softmax_output.unsqueeze(2), feature.unsqueeze(1))
         #ad_out = ad_net(op_out.view(-1, softmax_output.size(1) * feature.size(1)))
         # TODO: is this correct?
+        # (2, 19, 720, 1280)
         op_out = torch.mul(softmax_output, feature)
+        # TODO: Current output ad_out is [2, 1, 180, 320]
+        # Qiwen: I want the output shape to be (2, 1), so I added 2 linear layer 
+        # in FCDiscriminatorTest
+        # Because the discriminator only discriminate on the overall image,
+        # not on the pixel level.
+        # (2, 1, 180, 320)
+        # ad_net here is the FCDiscriminatorTest
+        #TODO: I actually want the output to be (2,1,720,1280)
         ad_out = ad_net(op_out)
     else:
         random_out = random_layer.forward([feature, softmax_output])
@@ -33,7 +43,6 @@ def CDAN(input_list, ad_net, entropy=None, coeff=None, random_layer=None):
     print("op_out", op_out.size())
     print("ad_out", ad_out.size())
     batch_size = softmax_output.size(0) // 2
-    print("batch_size", batch_size)
     dc_target = torch.from_numpy(np.array([[1]] * batch_size + [[0]] * batch_size)).float()
     print("dc_target", dc_target.size())
     if entropy is not None:
