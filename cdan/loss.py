@@ -22,13 +22,20 @@ def CDAN(input_list, ad_net, entropy=None, coeff=None, random_layer=None):
     softmax_output = input_list[1].detach()
     feature = input_list[0]
     if random_layer is None:
-        op_out = torch.bmm(softmax_output.unsqueeze(2), feature.unsqueeze(1))
-        ad_out = ad_net(op_out.view(-1, softmax_output.size(1) * feature.size(1)))
+        #op_out = torch.bmm(softmax_output.unsqueeze(2), feature.unsqueeze(1))
+        #ad_out = ad_net(op_out.view(-1, softmax_output.size(1) * feature.size(1)))
+        # TODO: is this correct?
+        op_out = torch.mul(softmax_output, feature)
+        ad_out = ad_net(op_out)
     else:
         random_out = random_layer.forward([feature, softmax_output])
         ad_out = ad_net(random_out.view(-1, random_out.size(1)))       
+    print("op_out", op_out.size())
+    print("ad_out", ad_out.size())
     batch_size = softmax_output.size(0) // 2
-    dc_target = torch.from_numpy(np.array([[1]] * batch_size + [[0]] * batch_size)).float().cuda()
+    print("batch_size", batch_size)
+    dc_target = torch.from_numpy(np.array([[1]] * batch_size + [[0]] * batch_size)).float()
+    print("dc_target", dc_target.size())
     if entropy is not None:
         entropy.register_hook(grl_hook(coeff))
         entropy = 1.0+torch.exp(-entropy)

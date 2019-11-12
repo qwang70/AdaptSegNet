@@ -18,10 +18,12 @@ from tensorboardX import SummaryWriter
 import pdb
 
 from model.deeplab_multi import DeeplabMulti
-from model.discriminator import FCDiscriminator
+from model.discriminator import FCDiscriminator, FCDiscriminatorTest
 from utils.loss import CrossEntropy2d
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
+
+from cdan.loss import CDAN
 
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
@@ -201,7 +203,9 @@ def main():
     cudnn.benchmark = True
 
     # init D
-    model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
+    #TODO: uncomment
+    #model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
+    model_D = FCDiscriminatorTest(num_classes=args.num_classes).to(device)
     model_D.train()
     """
     model_D1 = FCDiscriminator(num_classes=args.num_classes).to(device)
@@ -322,11 +326,12 @@ def main():
             images = images.to(device)
             labels = labels.long().to(device)
 
-            # (1, 19, x, y)
+            # images.size() == [1, 3, 720, 1280]
             pred1, pred2 = model(images)
-            # (1, 19, 720, 1280)
+            # pred1, pred2 size == [1, 19, 91, 161]
             pred1 = interp(pred1)
             pred2 = interp(pred2)
+            # size (1, 19, 720, 1280)
 
             loss_seg1 = seg_loss(pred1, labels)
             loss_seg2 = seg_loss(pred2, labels)
@@ -334,7 +339,8 @@ def main():
 
             # proper normalization
             loss = loss / args.iter_size
-            loss.backward()
+            # TODO: uncomment
+            #loss.backward()
             loss_seg_value1 += loss_seg1.item() / args.iter_size
             loss_seg_value2 += loss_seg2.item() / args.iter_size
 
@@ -344,37 +350,50 @@ def main():
             images, _, _ = batch
             images = images.to(device)
 
+            print(images.size())
+            # images.size() == [1, 3, 720, 1280]
             pred_target1, pred_target2 = model(images)
+            
+            # pred_target1, 2 == [1, 19, 91, 161]
             pred_target1 = interp_target(pred_target1)
             pred_target2 = interp_target(pred_target2)
+            # pred_target1, 2 == [1, 19, 720, 1280]
 
-            pred_target = torch.cat((pred_target1, pred_target2), 1)
-            print("pred_target", pred_target.size())
+            features = torch.cat((pred1, pred_target1), dim=0)
+            outputs = torch.cat((pred2, pred_target2), dim=0)
+            softmax_out = nn.Softmax(dim=1)(outputs)
+            # features.size() == [2, 19, 720, 1280]
+            # softmax_out.size() == [2, 19, 720, 1280]
 
-            D_out = model_D(F.softmax(pred_target))
+            transfer_loss = CDAN([features, softmax_out], model_D, None, None, random_layer=None)
+            print(transfer_loss)
+
+            classifier_loss = nn.CrossEntropyLoss()(pred2, source_label)
+            total_loss = args.lambda_adv_target1 * transfer_loss + classifier_loss
+            total_loss.backward()
+            optimizer.step()
+            print("after optimizer step")
+            continue
+
             """
+            D_out = model_D(F.softmax(pred_target))
             D_out1 = model_D1(F.softmax(pred_target1))
             D_out2 = model_D2(F.softmax(pred_target2))
-            """
             print("source_label", source_label)
 
             print("D_out", D_out)
             loss_adv_target = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
             print("loss_adv_target", loss_adv_target)
-            quit()
 
-            """
             loss_adv_target1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(source_label).to(device))
 
             loss_adv_target2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
 
             loss = args.lambda_adv_target1 * loss_adv_target1 + args.lambda_adv_target2 * loss_adv_target2
-            """
             # TODO: change the loss function
             loss = loss / args.iter_size
             loss.backward()
             loss_adv_target_value += loss_adv_target.item() / args.iter_size
-            """
             loss_adv_target_value1 += loss_adv_target1.item() / args.iter_size
             loss_adv_target_value2 += loss_adv_target2.item() / args.iter_size
             """
