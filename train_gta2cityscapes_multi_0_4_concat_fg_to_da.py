@@ -30,7 +30,7 @@ IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32
 MODEL = 'DeepLab'
 BATCH_SIZE = 1
 ITER_SIZE = 1
-NUM_WORKERS = 4
+NUM_WORKERS = 2
 DATA_DIRECTORY = './data/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
@@ -196,12 +196,12 @@ def main():
                 new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
                 # print i_parts
         model.load_state_dict(new_params)
-
+    # pdb.set_trace()
     model.train()
     model.to(device)
 
     cudnn.benchmark = True
-
+    # pdb.set_trace()
     # init D
     #TODO: uncomment
     #model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
@@ -217,7 +217,7 @@ def main():
     model_D2.train()
     model_D2.to(device)
     """
-    
+    # pdb.set_trace()
     # pdb.set_trace()
     import datetime
     now_time = datetime.datetime.now()
@@ -284,7 +284,7 @@ def main():
     writer = SummaryWriter(args.log_dir)
 
     for i_iter in range(args.num_steps):
-
+        # pdb.set_trace()
         loss_seg_value1 = 0
         loss_seg_value2 = 0
 
@@ -322,31 +322,31 @@ def main():
             images, labels, _, _ = batch
             images = images.to(device)
             labels = labels.long().to(device)
-
+            # pdb.set_trace()
             # images.size() == [1, 3, 720, 1280]
             pred1, pred2 = model(images)
             # pred1, pred2 size == [1, 19, 91, 161]
             pred1 = interp(pred1)
             pred2 = interp(pred2)
             # size (1, 19, 720, 1280)
-
+            # pdb.set_trace()
             loss_seg1 = seg_loss(pred1, labels)
             loss_seg2 = seg_loss(pred2, labels)
             loss = loss_seg2 + args.lambda_seg * loss_seg1
-
+            # pdb.set_trace()
             # proper normalization
             loss = loss / args.iter_size
             # TODO: uncomment
-            #loss.backward()
+            loss.backward()
             loss_seg_value1 += loss_seg1.item() / args.iter_size
             loss_seg_value2 += loss_seg2.item() / args.iter_size
-
+            # pdb.set_trace()
             # train with target
 
             _, batch = targetloader_iter.__next__()
             images, _, _ = batch
             images = images.to(device)
-
+            # pdb.set_trace()
             # images.size() == [1, 3, 720, 1280]
             pred_target1, pred_target2 = model(images)
             
@@ -354,17 +354,17 @@ def main():
             pred_target1 = interp_target(pred_target1)
             pred_target2 = interp_target(pred_target2)
             # pred_target1, 2 == [1, 19, 720, 1280]
-
+            # pdb.set_trace()
             features = torch.cat((pred1, pred_target1), dim=0)
             outputs = torch.cat((pred2, pred_target2), dim=0)
             softmax_out = nn.Softmax(dim=1)(outputs)
             # features.size() == [2, 19, 720, 1280]
             # softmax_out.size() == [2, 19, 720, 1280]
-
+            # pdb.set_trace()
             transfer_loss = CDAN([features, softmax_out], model_D, None, None, random_layer=None)
-
+            # pdb.set_trace()
             classifier_loss = nn.BCEWithLogitsLoss()(pred2, 
-                    torch.FloatTensor(pred2.data.size()).fill_(source_label))
+                    torch.FloatTensor(pred2.data.size()).fill_(source_label).cuda())
             total_loss = args.lambda_adv_target1 * transfer_loss + classifier_loss
             total_loss.backward()
             optimizer_D.step()
