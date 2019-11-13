@@ -39,11 +39,14 @@ def CDAN(input_list, ad_net, entropy=None, coeff=None, random_layer=None):
     else:
         random_out = random_layer.forward([feature, softmax_output])
         ad_out = ad_net(random_out.view(-1, random_out.size(1)))       
-    print("op_out", op_out.size())
-    print("ad_out", ad_out.size())
     batch_size = softmax_output.size(0) // 2
     dc_target = torch.from_numpy(np.array([[1]] * batch_size + [[0]] * batch_size)).float()
-    print("dc_target", dc_target.size())
+
+    # Half size of ad_out is the batch size of the synthesis sample/real sample.
+    # Half of the batch size of ad_out is fill with label 1, and the other half
+    # is filled with label 0
+    half_size = ad_out.data[:batch_size].size()
+    dc_target = torch.cat((torch.FloatTensor(half_size).fill_(0),torch.FloatTensor(half_size).fill_(1)), dim = 0)
     if entropy is not None:
         entropy.register_hook(grl_hook(coeff))
         entropy = 1.0+torch.exp(-entropy)
@@ -57,7 +60,7 @@ def CDAN(input_list, ad_net, entropy=None, coeff=None, random_layer=None):
                  target_weight / torch.sum(target_weight).detach().item()
         return torch.sum(weight.view(-1, 1) * nn.BCELoss(reduction='none')(ad_out, dc_target)) / torch.sum(weight).detach().item()
     else:
-        return nn.BCELoss()(ad_out, dc_target) 
+        return nn.BCEWithLogitsLoss()(ad_out, dc_target) 
 
 def DANN(features, ad_net):
     ad_out = ad_net(features)

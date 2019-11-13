@@ -286,15 +286,12 @@ def main():
     for i_iter in range(args.num_steps):
 
         loss_seg_value1 = 0
-        loss_adv_target_value1 = 0
-        loss_D_value1 = 0
-
         loss_seg_value2 = 0
-        loss_adv_target_value2 = 0
-        loss_D_value2 = 0
 
         optimizer.zero_grad()
         adjust_learning_rate(optimizer, i_iter)
+        optimizer_D.zero_grad()
+        adjust_learning_rate(optimizer_D, i_iter)
 
         """
         optimizer_D1.zero_grad()
@@ -350,7 +347,6 @@ def main():
             images, _, _ = batch
             images = images.to(device)
 
-            print(images.size())
             # images.size() == [1, 3, 720, 1280]
             pred_target1, pred_target2 = model(images)
             
@@ -366,106 +362,24 @@ def main():
             # softmax_out.size() == [2, 19, 720, 1280]
 
             transfer_loss = CDAN([features, softmax_out], model_D, None, None, random_layer=None)
-            print(transfer_loss)
 
-            classifier_loss = nn.CrossEntropyLoss()(pred2, source_label)
+            classifier_loss = nn.BCEWithLogitsLoss()(pred2, 
+                    torch.FloatTensor(pred2.data.size()).fill_(source_label))
             total_loss = args.lambda_adv_target1 * transfer_loss + classifier_loss
             total_loss.backward()
-            optimizer.step()
-            print("after optimizer step")
+            optimizer_D.step()
+            #TODO: normalize loss?
             continue
-            # TODO: 这下面的代码还需要吗？
-
-            D_out = model_D(F.softmax(pred_target))
-            D_out1 = model_D1(F.softmax(pred_target1))
-            D_out2 = model_D2(F.softmax(pred_target2))
-            print("source_label", source_label)
-
-            print("D_out", D_out)
-            loss_adv_target = bce_loss(D_out, torch.FloatTensor(D_out.data.size()).fill_(source_label).to(device))
-            print("loss_adv_target", loss_adv_target)
-
-            loss_adv_target1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(source_label).to(device))
-
-            loss_adv_target2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
-
-            loss = args.lambda_adv_target1 * loss_adv_target1 + args.lambda_adv_target2 * loss_adv_target2
-            loss = loss / args.iter_size
-            loss.backward()
-            loss_adv_target_value += loss_adv_target.item() / args.iter_size
-            loss_adv_target_value1 += loss_adv_target1.item() / args.iter_size
-            loss_adv_target_value2 += loss_adv_target2.item() / args.iter_size
-
-            # train D
-
-            # bring back requires_grad
-            for param in model_D1.parameters():
-                param.requires_grad = True
-
-            for param in model_D2.parameters():
-                param.requires_grad = True
-
-            # train with source
-            pred1 = pred1.detach()
-            pred2 = pred2.detach()
-
-            pred = torch.cat((pred1, pred2), 1)
-            D_out = model_D1(F.softmax(pred))
-            """
-            D_out1 = model_D1(F.softmax(pred1))
-            D_out2 = model_D2(F.softmax(pred2))
-            """
-
-            loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(source_label).to(device))
-
-            loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(source_label).to(device))
-
-            loss_D1 = loss_D1 / args.iter_size / 2
-            loss_D2 = loss_D2 / args.iter_size / 2
-
-            loss_D1.backward()
-            loss_D2.backward()
-
-            loss_D_value1 += loss_D1.item()
-            loss_D_value2 += loss_D2.item()
-
-            # train with target
-            pred_target1 = pred_target1.detach()
-            pred_target2 = pred_target2.detach()
-
-            pred_target = torch.cat((pred_target1, pred_target2), 1)
-
-            D_out = model_D1(F.softmax(pred_target))
-            """
-            D_out1 = model_D1(F.softmax(pred_target1))
-            D_out2 = model_D2(F.softmax(pred_target2))
-            """
-
-            # TODO: 改
-            loss_D1 = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(target_label).to(device))
-
-            loss_D2 = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(target_label).to(device))
-
-            loss_D1 = loss_D1 / args.iter_size / 2
-            loss_D2 = loss_D2 / args.iter_size / 2
-
-            loss_D1.backward()
-            loss_D2.backward()
-
-            loss_D_value1 += loss_D1.item()
-            loss_D_value2 += loss_D2.item()
 
         optimizer.step()
-        optimizer_D1.step()
-        optimizer_D2.step()
+        optimizer_D.step()
 
         scalar_info = {
             'loss_seg1': loss_seg_value1,
             'loss_seg2': loss_seg_value2,
-            'loss_adv_target1': loss_adv_target_value1,
-            'loss_adv_target2': loss_adv_target_value2,
-            'loss_D1': loss_D_value1,
-            'loss_D2': loss_D_value2,
+            'tranfer loss': transfer_loss,
+            'classifier loss': classifier_loss,
+            'total loss': total_loss,
         }
 
         if i_iter % 10 == 0:
@@ -474,21 +388,19 @@ def main():
 
         print('exp = {}'.format(args.snapshot_dir))
         print(
-        'iter = {0:8d}/{1:8d}, loss_seg1 = {2:.3f} loss_seg2 = {3:.3f} loss_adv1 = {4:.3f}, loss_adv2 = {5:.3f} loss_D1 = {6:.3f} loss_D2 = {7:.3f}'.format(
-            i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, loss_adv_target_value1, loss_adv_target_value2, loss_D_value1, loss_D_value2))
+        'iter = {0:8d}/{1:8d}, loss_seg1 = {2:.3f} loss_seg2 = {3:.3f} transfer = {4:.3f}, classifier loss = {5:.3f} total loss = {6:.3f}'.format(
+            i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, transfer_loss, classifier_loss, total_loss))
 
         if i_iter >= args.num_steps_stop - 1:
             print('save model ...')
             torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '.pth'))
-            torch.save(model_D1.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '_D1.pth'))
-            torch.save(model_D2.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '_D2.pth'))
+            torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '_D.pth'))
             break
 
         if i_iter % args.save_pred_every == 0 and i_iter != 0:
             print('taking snapshot ...')
             torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '.pth'))
-            torch.save(model_D1.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D1.pth'))
-            torch.save(model_D2.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D2.pth'))
+            torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D1.pth'))
 
     writer.close()
 

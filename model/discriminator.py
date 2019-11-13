@@ -12,14 +12,30 @@ class FCDiscriminatorTest(nn.Module):
 
         self.leaky_relu = nn.LeakyReLU(negative_slope=0.2, inplace=True)
         #self.up_sample = nn.Upsample(scale_factor=32, mode='bilinear')
+        self.max_pool = nn.MaxPool2d(4)
+        self.batch_norm = nn.BatchNorm2d(1)
+        self.flatten = nn.Flatten(start_dim=1, end_dim=-1)
+        self.fc = nn.Linear((180-3) * (320-3), 1)
         self.sigmoid = nn.Sigmoid()
 
 
     def forward(self, x):
         x = self.temp(x)
+        print("x", x.size())
         x = self.classifier(x)
+        print("classifier x", x.size())
+        """
+        x = self.max_pool(x)
+        print("max pool x", x.size())
+        x = self.batch_norm(x)
+        print("batch norm x", x.size())
+        x = self.flatten(x)
+        print("flatten x", x.size())
+        x = self.fc(x)
+        print("fc x", x.size())
+        """
         #x = self.up_sample(x)
-        x = self.sigmoid(x) 
+        #x = self.sigmoid(x) 
 
         return x
 class FCDiscriminator(nn.Module):
