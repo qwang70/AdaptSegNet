@@ -40,7 +40,7 @@ def CDAN(input_list, ad_net, entropy=None, coeff=None, random_layer=None):
         random_out = random_layer.forward([feature, softmax_output])
         ad_out = ad_net(random_out.view(-1, random_out.size(1)))       
     batch_size = softmax_output.size(0) // 2
-    dc_target = torch.from_numpy(np.array([[1]] * batch_size + [[0]] * batch_size)).float()
+    #dc_target = torch.from_numpy(np.array([[1]] * batch_size + [[0]] * batch_size)).float()
 
     # Half size of ad_out is the batch size of the synthesis sample/real sample.
     # Half of the batch size of ad_out is fill with label 1, and the other half
