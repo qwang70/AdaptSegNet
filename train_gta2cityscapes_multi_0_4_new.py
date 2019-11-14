@@ -366,7 +366,7 @@ def main():
             pred1, pred2 = model(images)
             pred1 = interp(pred1)
             pred2 = interp(pred2)
-
+            pdb.set_trace()
             loss_seg1 = seg_loss(pred1, labels)
             loss_seg2 = seg_loss(pred2, labels)
             loss = loss_seg2 + args.lambda_seg * loss_seg1
