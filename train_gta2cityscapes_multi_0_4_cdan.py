@@ -48,7 +48,7 @@ POWER = 0.9
 RANDOM_SEED = 1234
 RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 SAVE_NUM_IMAGES = 2
-SAVE_PRED_EVERY = 5000
+SAVE_PRED_EVERY = 2
 SNAPSHOT_DIR = './snapshots/'
 WEIGHT_DECAY = 0.0005
 LOG_DIR = './log'
@@ -177,9 +177,9 @@ def generate_snapshot_name(args):
 
     import datetime
     now_time = datetime.datetime.now()
-    snapshot_dir = SNAPSHOT_DIR + 'baseline_' + 'multi_' \
-        + str(NUM_STEPS) + '_seg{}'.format(args.lambda_seg) + '_adv1{}'.format(args.lambda_adv_target1)\
-        + '_adv2{}'.format(args.lambda_adv_target2) + '_bs{}'.format(BATCH_SIZE) + \
+    snapshot_dir = SNAPSHOT_DIR + 'baseline_cdan_norandom' + 'multi_' \
+        + str(NUM_STEPS) + '_seg{}'.format(args.lambda_seg) + '_adv{}'.format(args.lambda_adv)\
+        + '_bs{}'.format(BATCH_SIZE) + \
         '_{}-{}-{}-{}'.format(now_time.month, now_time.day, now_time.hour, now_time.minute)
 
     return snapshot_dir
@@ -481,6 +481,17 @@ def main():
             print('taking snapshot ...')
             torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '.pth'))
             torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D.pth'))
+
+            ###### also record latest saved iteration #######
+            args_dict['learning_rate'] = optimizer.param_groups[0]['lr']
+            args_dict['learning_rate_D'] = optimizer_D.param_groups[0]['lr']
+            args_dict['start_steps'] = i_iter 
+
+            args_dict_file = args.snapshot_dir + '/args_dict_{}.json'.format(i_iter)
+            with open(args_dict_file, 'w') as f:
+                json.dump(args_dict, f)
+
+            ###### also record latest saved iteration #######
 
     writer.close()
 
