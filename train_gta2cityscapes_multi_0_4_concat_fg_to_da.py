@@ -225,7 +225,7 @@ def main():
     # pdb.set_trace()
     import datetime
     now_time = datetime.datetime.now()
-    args.snapshot_dir = SNAPSHOT_DIR + 'baseline_' + 'multi_' \
+    args.snapshot_dir = SNAPSHOT_DIR + 'baseline_cdan_norand' + 'multi_' \
         + str(NUM_STEPS) + '_seg{}'.format(args.lambda_seg) + '_adv{}'.format(args.lambda_adv)\
         + '_bs{}'.format(BATCH_SIZE) + \
         '_{}-{}-{}-{}'.format(now_time.month, now_time.day, now_time.hour, now_time.minute)
