@@ -174,7 +174,7 @@ def generate_snapshot_name(args):
 
     import datetime
     now_time = datetime.datetime.now()
-    snapshot_dir = SNAPSHOT_DIR + 'baseline_' + 'single_' \
+    snapshot_dir = SNAPSHOT_DIR + 'baseline_' + 'multi_' \
         + str(NUM_STEPS) + '_seg{}'.format(args.lambda_seg) + '_adv1{}'.format(args.lambda_adv_target1)\
         + '_adv2{}'.format(args.lambda_adv_target2) + '_bs{}'.format(BATCH_SIZE) + \
         '_{}-{}-{}-{}'.format(now_time.month, now_time.day, now_time.hour, now_time.minute)
@@ -382,11 +382,11 @@ def main():
             _, batch = targetloader_iter.__next__()
             images, _, _ = batch
             images = images.to(device)
-
+            pdb.set_trace()
             pred_target1, pred_target2 = model(images)
             pred_target1 = interp_target(pred_target1)
             pred_target2 = interp_target(pred_target2)
-
+            pdb.set_trace()
             D_out1 = model_D1(F.softmax(pred_target1))
             D_out2 = model_D2(F.softmax(pred_target2))
 
