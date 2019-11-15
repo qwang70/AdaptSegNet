@@ -185,6 +185,46 @@ def generate_snapshot_name(args):
     return snapshot_dir
 
 
+def check_original_discriminator(args, pred_target1, pred_target2, n_iter):
+
+    device = torch.device("cuda" if not args.cpu else "cpu")
+
+    model_D1 = FCDiscriminator(num_classes=args.num_classes).to(device)
+    model_D2 = FCDiscriminator(num_classes=args.num_classes).to(device)
+    model_D1.eval()
+    model_D2.eval()
+
+    baseline_dir = 'snapshots/baseline_single_250000_seg0.1_adv10.0002_adv20.001_bs1_11-10-8-52/'
+    bce_loss = torch.nn.BCEWithLogitsLoss()
+    #### restore model_D1, D2 and model
+
+    # model_D1 parameters
+    D1 = baseline_dir + 'GTA5_150000_D1.pth'
+    saved_state_dict = torch.load(D1)
+    model_D1.load_state_dict(saved_state_dict)
+
+    # model_D2 parameters
+    D2 = baseline_dir + 'GTA5_150000_D2.pth'
+    saved_state_dict = torch.load(D2)
+    model_D2.load_state_dict(saved_state_dict)
+
+    D_out1 = model_D1(F.softmax(pred_target1))
+    D_out2 = model_D2(F.softmax(pred_target2))
+    orig_d1_loss = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(1).to(device))
+    orig_d2_loss = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(1).to(device))
+
+    original_discriminator_file = args.snapshot_dir + '/original_discriminator.txt'
+
+    with open(original_discriminator_file, 'a+') as f:
+        f.write('n_iter:{} '.format(n_iter))
+        f.write('orig d1 loss:{} '.format(orig_d1_loss))
+        f.write('orig d2 loss:{} '.format(orig_d2_loss))
+        f.write('\n')
+
+    del model_D1
+    del model_D2
+
+
 def main():
 
     """Create the model and start the training."""
@@ -199,7 +239,7 @@ def main():
     ###### load args for restart ######
     if RESTART:
         # pdb.set_trace()
-        args_dict_file = args.snapshot_dir + 'args_dict_{}.json'.format(RESTART_ITER)
+        args_dict_file = args.snapshot_dir + '/args_dict_{}.json'.format(RESTART_ITER)
         with open(args_dict_file) as f:
             args_dict_last = json.load(f)
         for arg in args_dict:
@@ -410,7 +450,7 @@ def main():
             # softmax_out.size() == [2, 19, 720, 1280]
             # pdb.set_trace()
             # transfer_loss = CDAN([features, softmax_out], model_D, None, None, random_layer=None)
-            D_out_target = CDAN([pred_target1, pred_target2], model_D, random_layer=None)
+            D_out_target = CDAN([F.softmax(pred_target1), F.softmax(pred_target2)], model_D, random_layer=None)
             dc_target = torch.FloatTensor(D_out_target.size()).fill_(0).cuda()
             # pdb.set_trace()
             adv_loss = args.lambda_adv * nn.BCEWithLogitsLoss()(D_out_target, dc_target)
@@ -429,7 +469,7 @@ def main():
 
             pred1 = pred1.detach()
             pred2 = pred2.detach()
-            D_out = CDAN([pred1, pred2], model_D, random_layer=None)
+            D_out = CDAN([F.softmax(pred1), F.softmax(pred2)], model_D, random_layer=None)
             
             dc_source = torch.FloatTensor(D_out.size()).fill_(1).cuda()
             # d_loss = CDAN(D_out, dc_source, None, None, random_layer=None)
@@ -441,7 +481,7 @@ def main():
 
             pred_target1 = pred_target1.detach()
             pred_target2 = pred_target2.detach()
-            D_out_target = CDAN([pred_target1, pred_target2], model_D, random_layer=None)
+            D_out_target = CDAN([F.softmax(pred_target1), F.softmax(pred_target2)], model_D, random_layer=None)
             
             dc_target = torch.FloatTensor(D_out_target.size()).fill_(0).cuda()
             d_loss = nn.BCEWithLogitsLoss()(D_out_target, dc_target)
@@ -481,6 +521,8 @@ def main():
             print('taking snapshot ...')
             torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '.pth'))
             torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D.pth'))
+
+            check_original_discriminator(args, pred_target1, pred_target2, i_iter)
 
             ###### also record latest saved iteration #######
             args_dict['learning_rate'] = optimizer.param_groups[0]['lr']
