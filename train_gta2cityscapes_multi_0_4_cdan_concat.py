@@ -451,7 +451,7 @@ def main():
             # pdb.set_trace()
             # transfer_loss = CDAN([features, softmax_out], model_D, None, None, random_layer=None)
             D_out_target = CDAN([F.softmax(pred_target1), F.softmax(pred_target2)], model_D, random_layer=None)
-            dc_target = torch.FloatTensor(D_out_target.size()).fill_(0).cuda()
+            dc_target = torch.FloatTensor(D_out_target.size()).fill_(1).cuda()
             # pdb.set_trace()
             adv_loss = args.lambda_adv * nn.BCEWithLogitsLoss()(D_out_target, dc_target)
             adv_loss = adv_loss / args.iter_size
@@ -471,7 +471,7 @@ def main():
             pred2 = pred2.detach()
             D_out = CDAN([F.softmax(pred1), F.softmax(pred2)], model_D, random_layer=None)
             
-            dc_source = torch.FloatTensor(D_out.size()).fill_(1).cuda()
+            dc_source = torch.FloatTensor(D_out.size()).fill_(0).cuda()
             # d_loss = CDAN(D_out, dc_source, None, None, random_layer=None)
             d_loss = nn.BCEWithLogitsLoss()(D_out, dc_source)
             d_loss = d_loss / args.iter_size
@@ -483,7 +483,7 @@ def main():
             pred_target2 = pred_target2.detach()
             D_out_target = CDAN([F.softmax(pred_target1), F.softmax(pred_target2)], model_D, random_layer=None)
             
-            dc_target = torch.FloatTensor(D_out_target.size()).fill_(0).cuda()
+            dc_target = torch.FloatTensor(D_out_target.size()).fill_(1).cuda()
             d_loss = nn.BCEWithLogitsLoss()(D_out_target, dc_target)
             d_loss = d_loss / args.iter_size
             # pdb.set_trace()
