@@ -48,7 +48,7 @@ POWER = 0.9
 RANDOM_SEED = 1234
 RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 SAVE_NUM_IMAGES = 2
-SAVE_PRED_EVERY = 5000
+SAVE_PRED_EVERY = 2
 SNAPSHOT_DIR = './snapshots/'
 WEIGHT_DECAY = 0.0005
 LOG_DIR = './log'
@@ -149,6 +149,8 @@ def get_arguments():
                         help="choose adaptation set.")
     parser.add_argument("--gan", type=str, default=GAN,
                         help="choose the GAN objective.")
+    parser.add_argument("--restart_from", type = str, default = RESTART_FROM, help = 'restore a whole training')
+    parser.add_argument("--start_steps", type = int, default = 0, help = 'where to start the training')
     return parser.parse_args()
 
 
@@ -239,7 +241,7 @@ def main():
     ###### load args for restart ######
     if RESTART:
         # pdb.set_trace()
-        args_dict_file = args.snapshot_dir + '/args_dict_{}.json'.format(RESTART_ITER)
+        args_dict_file = args.snapshot_dir + 'args_dict_{}.json'.format(RESTART_ITER)
         with open(args_dict_file) as f:
             args_dict_last = json.load(f)
         for arg in args_dict:
@@ -451,7 +453,7 @@ def main():
             # pdb.set_trace()
             # transfer_loss = CDAN([features, softmax_out], model_D, None, None, random_layer=None)
             D_out_target = CDAN([F.softmax(pred_target1), F.softmax(pred_target2)], model_D, random_layer=None)
-            dc_target = torch.FloatTensor(D_out_target.size()).fill_(1).cuda()
+            dc_target = torch.FloatTensor(D_out_target.size()).fill_(1).to(device)
             # pdb.set_trace()
             adv_loss = args.lambda_adv * nn.BCEWithLogitsLoss()(D_out_target, dc_target)
             adv_loss = adv_loss / args.iter_size
@@ -471,7 +473,7 @@ def main():
             pred2 = pred2.detach()
             D_out = CDAN([F.softmax(pred1), F.softmax(pred2)], model_D, random_layer=None)
             
-            dc_source = torch.FloatTensor(D_out.size()).fill_(0).cuda()
+            dc_source = torch.FloatTensor(D_out.size()).fill_(0).to(device)
             # d_loss = CDAN(D_out, dc_source, None, None, random_layer=None)
             d_loss = nn.BCEWithLogitsLoss()(D_out, dc_source)
             d_loss = d_loss / args.iter_size
@@ -483,7 +485,7 @@ def main():
             pred_target2 = pred_target2.detach()
             D_out_target = CDAN([F.softmax(pred_target1), F.softmax(pred_target2)], model_D, random_layer=None)
             
-            dc_target = torch.FloatTensor(D_out_target.size()).fill_(1).cuda()
+            dc_target = torch.FloatTensor(D_out_target.size()).fill_(1).to(device)
             d_loss = nn.BCEWithLogitsLoss()(D_out_target, dc_target)
             d_loss = d_loss / args.iter_size
             # pdb.set_trace()
@@ -529,7 +531,8 @@ def main():
             args_dict['learning_rate_D'] = optimizer_D.param_groups[0]['lr']
             args_dict['start_steps'] = i_iter 
 
-            args_dict_file = args.snapshot_dir + '/args_dict_{}.json'.format(i_iter)
+            args_dict_file = args.snapshot_dir + 'args_dict_{}.json'.format(i_iter)
+            pdb.set_trace()
             with open(args_dict_file, 'w') as f:
                 json.dump(args_dict, f)
 
