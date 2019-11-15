@@ -42,13 +42,13 @@ INPUT_SIZE_TARGET = '1280,720'
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
 NUM_CLASSES = 19
-NUM_STEPS = 20000
-NUM_STEPS_STOP = 20000  # early stopping
+NUM_STEPS = 250000
+NUM_STEPS_STOP = 150000  # early stopping
 POWER = 0.9
 RANDOM_SEED = 1234
 RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 SAVE_NUM_IMAGES = 2
-SAVE_PRED_EVERY = 2
+SAVE_PRED_EVERY = 5000
 SNAPSHOT_DIR = './snapshots/'
 WEIGHT_DECAY = 0.0005
 LOG_DIR = './log'
@@ -332,7 +332,7 @@ def main():
             print('taking snapshot ...')
             torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '.pth'))
 
-            check_original_discriminator(args, pred_target1, pred_target2, i_iter)
+            # check_original_discriminator(args, pred_target1, pred_target2, i_iter)
 
             ###### also record latest saved iteration #######
             args_dict['learning_rate'] = optimizer.param_groups[0]['lr']
