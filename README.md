@@ -120,3 +120,7 @@ I think several features might be useful in our experiment process:
   * "RESTART": if we want to train from scratch, we set it to FALSE, if we want to restart, we set it to TRUE
   * "RESTART_FROM": if we want to train from scratch, don't care about it. If we want to restart, set it to the directory that contains saved model checkpoint
   * "RESTART_ITER": if we want to train from scratch, don't care about it. If we want to restart, set it to the iter number that we want to restart from (this has to be the iter number that has a saved model checkpoint)
+
++ The second one is "generate_snapshot_name". It generates a name for the specific training task and is used to save model checkpoint and tensorboard log. At first I didn't use this function so I messed up a little bit, I'll clean the server today or tomorrow.
+
++ I also implemented evaluate and compute iou during training, but I don't think it is useful because I found that restart training works very well. If you need it just contact me.
