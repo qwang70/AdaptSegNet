@@ -1,3 +1,15 @@
+## Note Added by SZH:
+I think several features might be useful in our experiment process:
++ The first one is about restart training. There are 3 important parameters defined as global variables for this feature:
+  * "RESTART": if we want to train from scratch, we set it to FALSE, if we want to restart, we set it to TRUE
+  * "RESTART_FROM": if we want to train from scratch, don't care about it. If we want to restart, set it to the directory that contains saved model checkpoint
+  * "RESTART_ITER": if we want to train from scratch, don't care about it. If we want to restart, set it to the iter number that we want to restart from (this has to be the iter number that has a saved model checkpoint)
+
++ The second one is "generate_snapshot_name". It generates a name for the specific training task and is used to save model checkpoint and tensorboard log. At first I didn't use this function so I messed up a little bit, I'll clean the server today or tomorrow.
+
++ I also implemented evaluate and compute iou during training, but I don't think it is useful because I found that restart training works very well. If you need it just contact me.
+
+
 # Learning to Adapt Structured Output Space for Semantic Segmentation
 
 Pytorch implementation of our method for adapting semantic segmentation from the synthetic dataset (source domain) to the real dataset (target domain). Based on this implementation, our result is ranked 3rd in the [VisDA Challenge](http://ai.bu.edu/visda-2017/).
@@ -113,14 +125,3 @@ The model and code are available for non-commercial research purposes only.
 * 07/23/2018: update evaluation code for PyTorch 0.4
 * 06/04/2018: update pretrained VGG-16 model 
 * 02/2018: code released
-
-## Note Added by SZH:
-I think several features might be useful in our experiment process:
-+ The first one is about restart training. There are 3 important parameters defined as global variables for this feature:
-  * "RESTART": if we want to train from scratch, we set it to FALSE, if we want to restart, we set it to TRUE
-  * "RESTART_FROM": if we want to train from scratch, don't care about it. If we want to restart, set it to the directory that contains saved model checkpoint
-  * "RESTART_ITER": if we want to train from scratch, don't care about it. If we want to restart, set it to the iter number that we want to restart from (this has to be the iter number that has a saved model checkpoint)
-
-+ The second one is "generate_snapshot_name". It generates a name for the specific training task and is used to save model checkpoint and tensorboard log. At first I didn't use this function so I messed up a little bit, I'll clean the server today or tomorrow.
-
-+ I also implemented evaluate and compute iou during training, but I don't think it is useful because I found that restart training works very well. If you need it just contact me.
