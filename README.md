@@ -114,6 +114,8 @@ The model and code are available for non-commercial research purposes only.
 * 06/04/2018: update pretrained VGG-16 model 
 * 02/2018: code released
 
-
+## Note Added by SZH:
+I think several features might be useful in our experiment process:
++ The first one is about 
 
 
