@@ -116,6 +116,7 @@ The model and code are available for non-commercial research purposes only.
 
 ## Note Added by SZH:
 I think several features might be useful in our experiment process:
-+ The first one is about 
-
-
++ The first one is about restart training. There are 3 important parameters defined as global variables for this feature:
+  ++ "RESTART": if we want to train from scratch, we set it to FALSE, if we want to restart, we set it to TRUE
+  ++ "RESTART_FROM": if we want to train from scratch, don't care about it. If we want to restart, set it to the directory that contains saved model checkpoint
+  ++ "RESTART_ITER": if we want to train from scratch, don't care about it. If we want to restart, set it to the iter number that we want to restart from (this has to be the iter number that has a saved model checkpoint)
