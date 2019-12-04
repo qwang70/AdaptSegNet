@@ -176,9 +176,8 @@ def generate_snapshot_name(args):
 
     import datetime
     now_time = datetime.datetime.now()
-    snapshot_dir = SNAPSHOT_DIR + 'baseline_' + 'multi_' \
-        + str(NUM_STEPS) + '_seg{}'.format(args.lambda_seg) + '_adv1{}'.format(args.lambda_adv_target1)\
-        + '_adv2{}'.format(args.lambda_adv_target2) + '_bs{}'.format(BATCH_SIZE) + \
+    snapshot_dir = SNAPSHOT_DIR + 'mdd_' \
+        + str(NUM_STEPS) + '_bs{}'.format(BATCH_SIZE) + \
         '_{}-{}-{}-{}'.format(now_time.month, now_time.day, now_time.hour, now_time.minute)
 
     return snapshot_dir
@@ -222,7 +221,7 @@ def main():
         model = DeeplabMulti(num_classes=args.num_classes)
         width = 1024
         srcweight = 3
-        model = MDD(width=width, use_bottleneck=False, use_gpu=True, class_num=args.num_classes, srcweight=srcweight, args=args)
+        model = MDD(width=width, use_bottleneck=False, use_gpu=not args.cpu, class_num=args.num_classes, srcweight=srcweight, args=args)
     
     model.c_net.base_network.to(device)
 

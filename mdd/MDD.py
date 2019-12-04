@@ -1,6 +1,7 @@
 import torch.nn as nn
 import mdd.backbone as backbone
-import model.deeplab_multi as deeplab_multi
+import model.deeplab_multi_wo_classifier as deeplab_multi
+#import model.deeplab_vgg_wo_classifier as deeplab_vgg
 import torch.nn.functional as F
 import torch
 import numpy as np
@@ -41,6 +42,7 @@ class MDDNet(nn.Module):
         ## set base network
         #self.base_network = backbone.network_dict[base_net]()
         self.base_network = deeplab_multi.DeeplabMulti(num_classes=class_num)
+        #self.base_network = deeplab_vgg.DeeplabVGG(num_classes=class_num)
         self.use_bottleneck = use_bottleneck
         self.grl_layer = GradientReverseLayer()
         self.bottleneck_layer_list = [nn.Linear(
@@ -56,6 +58,11 @@ class MDDNet(nn.Module):
                                         nn.Linear(width, class_num)]
         self.classifier_layer_2 = nn.Sequential(*self.classifier_layer_2_list)
         self.softmax = nn.Softmax(dim=1)
+
+        
+        # From Deeplab Classifier
+        self.classifier1 = self._make_pred_layer(deeplab_multi.Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], class_num)
+        self.classifier2 = self._make_pred_layer(deeplab_multi.Classifier_Module, 2048, [6, 12, 18, 24], [6, 12, 18, 24], class_num)
 
         ## initialization
         self.init_deeplab_multi(args)
@@ -101,21 +108,30 @@ class MDDNet(nn.Module):
             self.base_network.load_state_dict(new_params)
         self.base_network.train()
 
+    def _make_pred_layer(self, block, inplanes, dilation_series, padding_series, num_classes):
+        return block(inplanes, dilation_series, padding_series, num_classes)
+
     def forward(self, inputs):
-        _, features = self.base_network(inputs) # (b, 3, w_small, h_small)
-        features = features.permute(0,2,3,1) # (b, w, h, 19)
-        if self.use_bottleneck:
-            features = self.bottleneck_layer(features)
+        _, features = self.base_network(inputs) # (b, 3, w_small, h_small) # DeeplabMulti
+        #features = self.base_network(inputs) # (b, 3, w_small, h_small) # Deeplab_VGG
+
+        pdb.set_trace()
+        #features = features.permute(0,2,3,1) # (b, w, h, 19)
+        #if self.use_bottleneck:
+        #    features = self.bottleneck_layer(features)
         features_adv = self.grl_layer(features)
-        outputs_adv = self.classifier_layer_2(features_adv)
+
+        #outputs_adv = self.classifier_layer_2(features_adv)
+        outputs_adv = self.classifier2(features_adv)
         
-        outputs = self.classifier_layer(features)
+        #outputs = self.classifier_layer(features)
+        outputs = self.classifier1(features)
         softmax_outputs = self.softmax(outputs)
 
         # outputs, outputs_adv: [2, 65, 129, 19]
         # permute back
-        outputs = outputs.permute(0,3,1,2)
-        outputs_adv = outputs_adv.permute(0,3,1,2)
+        #outputs = outputs.permute(0,3,1,2)
+        #outputs_adv = outputs_adv.permute(0,3,1,2)
         # outputs, outputs_adv: [2, 19, 65, 129]
         return features, outputs, softmax_outputs, outputs_adv
 
@@ -139,10 +155,10 @@ class MDD(object):
         class_criterion = nn.CrossEntropyLoss(ignore_index=255)
 
         _, outputs, _, outputs_adv = self.c_net(inputs)
+        pdb.set_trace()
         outputs = self.interp(outputs)
         outputs_adv = self.interp(outputs_adv)
 
-        #pdb.set_trace()
         classifier_loss = class_criterion(outputs.narrow(0, 0, labels_source.size(0)), labels_source)
 
         target_adv = outputs.max(1)[1]
@@ -152,7 +168,7 @@ class MDD(object):
         classifier_loss_adv_src = class_criterion(outputs_adv.narrow(0, 0, labels_source.size(0)), target_adv_src)
 
         logloss_tgt = torch.log(1 - F.softmax(outputs_adv.narrow(0, labels_source.size(0), inputs.size(0) - labels_source.size(0)), dim = 1))
-        classifier_loss_adv_tgt = F.nll_loss(logloss_tgt, target_adv_tgt)
+        classifier_loss_adv_tgt = F.nll_loss(logloss_tgt, target_adv_tgt, ignore_index=255)
 
         transfer_loss = self.srcweight * classifier_loss_adv_src + classifier_loss_adv_tgt
 
