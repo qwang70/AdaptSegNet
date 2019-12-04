@@ -18,12 +18,15 @@ from tensorboardX import SummaryWriter
 import pdb
 
 from model.deeplab_multi import DeeplabMulti
-from model.discriminator import FCDiscriminator, FCDiscriminatorTest
+from model.discriminator import FCDiscriminator
 from utils.loss import CrossEntropy2d
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
 
-from cdan.loss import CDAN
+from cdan.loss_cdan import CDAN
+
+# from evaluate_during_training import evaluate, colorize_mask
+
 
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
@@ -43,12 +46,12 @@ LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
 NUM_CLASSES = 19
 NUM_STEPS = 250000
-NUM_STEPS_STOP = 150000  # early stopping
+NUM_STEPS_STOP = 250000  # early stopping
 POWER = 0.9
 RANDOM_SEED = 1234
 RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 SAVE_NUM_IMAGES = 2
-SAVE_PRED_EVERY = 5000
+SAVE_PRED_EVERY = 3000
 SNAPSHOT_DIR = './snapshots/'
 WEIGHT_DECAY = 0.0005
 LOG_DIR = './log'
@@ -149,6 +152,8 @@ def get_arguments():
                         help="choose adaptation set.")
     parser.add_argument("--gan", type=str, default=GAN,
                         help="choose the GAN objective.")
+    parser.add_argument("--restart_from", type = str, default = RESTART_FROM, help = 'restore a whole training')
+    parser.add_argument("--start_steps", type = int, default = 0, help = 'where to start the training')
     return parser.parse_args()
 
 
@@ -177,12 +182,52 @@ def generate_snapshot_name(args):
 
     import datetime
     now_time = datetime.datetime.now()
-    snapshot_dir = SNAPSHOT_DIR + 'baseline_cdan_norandom_' + 'multi_' \
+    snapshot_dir = SNAPSHOT_DIR + 'baseline_cdan_concat_norandom_' + 'multi_' \
         + str(NUM_STEPS) + '_seg{}'.format(args.lambda_seg) + '_adv{}'.format(args.lambda_adv)\
         + '_bs{}'.format(BATCH_SIZE) + \
         '_{}-{}-{}-{}'.format(now_time.month, now_time.day, now_time.hour, now_time.minute)
 
     return snapshot_dir
+
+
+def check_original_discriminator(args, pred_target1, pred_target2, n_iter):
+
+    device = torch.device("cuda" if not args.cpu else "cpu")
+
+    model_D1 = FCDiscriminator(num_classes=args.num_classes).to(device)
+    model_D2 = FCDiscriminator(num_classes=args.num_classes).to(device)
+    model_D1.eval()
+    model_D2.eval()
+
+    baseline_dir = 'snapshots/baseline_single_250000_seg0.1_adv10.0002_adv20.001_bs1_11-10-8-52/'
+    bce_loss = torch.nn.BCEWithLogitsLoss()
+    #### restore model_D1, D2 and model
+
+    # model_D1 parameters
+    D1 = baseline_dir + 'GTA5_150000_D1.pth'
+    saved_state_dict = torch.load(D1)
+    model_D1.load_state_dict(saved_state_dict)
+
+    # model_D2 parameters
+    D2 = baseline_dir + 'GTA5_150000_D2.pth'
+    saved_state_dict = torch.load(D2)
+    model_D2.load_state_dict(saved_state_dict)
+
+    D_out1 = model_D1(F.softmax(pred_target1))
+    D_out2 = model_D2(F.softmax(pred_target2))
+    orig_d1_loss = bce_loss(D_out1, torch.FloatTensor(D_out1.data.size()).fill_(1).to(device))
+    orig_d2_loss = bce_loss(D_out2, torch.FloatTensor(D_out2.data.size()).fill_(1).to(device))
+
+    original_discriminator_file = args.snapshot_dir + '/original_discriminator.txt'
+
+    with open(original_discriminator_file, 'a+') as f:
+        f.write('n_iter:{} '.format(n_iter))
+        f.write('orig d1 loss:{} '.format(orig_d1_loss))
+        f.write('orig d2 loss:{} '.format(orig_d2_loss))
+        f.write('\n')
+
+    del model_D1
+    del model_D2
 
 
 def main():
@@ -199,7 +244,7 @@ def main():
     ###### load args for restart ######
     if RESTART:
         # pdb.set_trace()
-        args_dict_file = args.snapshot_dir + 'args_dict_{}.json'.format(RESTART_ITER)
+        args_dict_file = args.snapshot_dir + '/args_dict_{}.json'.format(RESTART_ITER)
         with open(args_dict_file) as f:
             args_dict_last = json.load(f)
         for arg in args_dict:
@@ -221,7 +266,7 @@ def main():
     if args.model == 'DeepLab':
         model = DeeplabMulti(num_classes=args.num_classes)
     
-    model_D = FCDiscriminatorTest(num_classes=args.num_classes).to(device)
+    model_D = FCDiscriminator(num_classes=2*args.num_classes).to(device)
 
     #### restore model_D and model
     if RESTART:
@@ -368,8 +413,8 @@ def main():
             # size (1, 19, 720, 1280)
             # pdb.set_trace()
 
-            feature = nn.Softmax(dim=1)(pred1)
-            softmax_out = nn.Softmax(dim=1)(pred2)
+            # feature = nn.Softmax(dim=1)(pred1)
+            # softmax_out = nn.Softmax(dim=1)(pred2)
 
             loss_seg1 = seg_loss(pred1, labels)
             loss_seg2 = seg_loss(pred2, labels)
@@ -401,8 +446,8 @@ def main():
             # pred_target1, 2 == [1, 19, 720, 1280]
             # pdb.set_trace()
 
-            feature_target = nn.Softmax(dim=1)(pred_target1)
-            softmax_out_target = nn.Softmax(dim=1)(pred_target2)
+            # feature_target = nn.Softmax(dim=1)(pred_target1)
+            # softmax_out_target = nn.Softmax(dim=1)(pred_target2)
 
             # features = torch.cat((pred1, pred_target1), dim=0)
             # outputs = torch.cat((pred2, pred_target2), dim=0)
@@ -410,11 +455,12 @@ def main():
             # softmax_out.size() == [2, 19, 720, 1280]
             # pdb.set_trace()
             # transfer_loss = CDAN([features, softmax_out], model_D, None, None, random_layer=None)
-            D_out_target = CDAN([feature_target, softmax_out_target], model_D, None, None, random_layer=None)
-            dc_target = torch.FloatTensor(D_out_target.size()).fill_(0).cuda()
+            D_out_target = CDAN([F.softmax(pred_target1), F.softmax(pred_target2)], model_D, cdan_implement = 'concat')
+            dc_source = torch.FloatTensor(D_out_target.size()).fill_(0).to(device)
             # pdb.set_trace()
-            adv_loss = args.lambda_adv * nn.BCEWithLogitsLoss()(D_out_target, dc_target)
+            adv_loss = nn.BCEWithLogitsLoss()(D_out_target, dc_source)
             adv_loss = adv_loss / args.iter_size
+            adv_loss = args.lambda_adv * adv_loss
             # pdb.set_trace()
             # classifier_loss = nn.BCEWithLogitsLoss()(pred2, 
             #        torch.FloatTensor(pred2.data.size()).fill_(source_label).cuda())
@@ -427,11 +473,11 @@ def main():
             for params in model_D.parameters():
                 params.requires_grad_(requires_grad = True)
 
-            feature = feature.detach()
-            softmax_out = softmax_out.detach()
-            D_out = CDAN([feature, softmax_out], model_D, None, None, random_layer=None)
+            pred1 = pred1.detach()
+            pred2 = pred2.detach()
+            D_out = CDAN([F.softmax(pred1), F.softmax(pred2)], model_D, cdan_implement = 'concat')
             
-            dc_source = torch.FloatTensor(D_out.size()).fill_(1).cuda()
+            dc_source = torch.FloatTensor(D_out.size()).fill_(0).to(device)
             # d_loss = CDAN(D_out, dc_source, None, None, random_layer=None)
             d_loss = nn.BCEWithLogitsLoss()(D_out, dc_source)
             d_loss = d_loss / args.iter_size
@@ -439,11 +485,11 @@ def main():
             d_loss.backward()
             d_loss_value += d_loss.item()
 
-            feature_target = feature_target.detach()
-            softmax_out_target = softmax_out_target.detach()
-            D_out_target = CDAN([feature_target, softmax_out_target], model_D, None, None, random_layer=None)
+            pred_target1 = pred_target1.detach()
+            pred_target2 = pred_target2.detach()
+            D_out_target = CDAN([F.softmax(pred_target1), F.softmax(pred_target2)], model_D, cdan_implement = 'concat')
             
-            dc_target = torch.FloatTensor(D_out_target.size()).fill_(0).cuda()
+            dc_target = torch.FloatTensor(D_out_target.size()).fill_(1).to(device)
             d_loss = nn.BCEWithLogitsLoss()(D_out_target, dc_target)
             d_loss = d_loss / args.iter_size
             # pdb.set_trace()
@@ -481,6 +527,12 @@ def main():
             print('taking snapshot ...')
             torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '.pth'))
             torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D.pth'))
+
+            # check_original_discriminator(args, pred_target1, pred_target2, i_iter)
+            save_path = args.snapshot_dir + '/eval_{}'.format(i_iter)
+            if not os.path.exists(save_path):
+                os.makedirs(save_path)
+            # evaluate(args, save_path, args.snapshot_dir, i_iter)
 
             ###### also record latest saved iteration #######
             args_dict['learning_rate'] = optimizer.param_groups[0]['lr']
