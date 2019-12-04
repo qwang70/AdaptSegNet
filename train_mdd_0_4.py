@@ -18,27 +18,26 @@ from tensorboardX import SummaryWriter
 import pdb
 
 from model.deeplab_multi import DeeplabMulti
-from model.discriminator import FCDiscriminator, FCDiscriminatorTest
+from model.discriminator import FCDiscriminator
 from utils.loss import CrossEntropy2d
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
-
-from cdan.loss import CDAN
+from mdd.MDD import MDD
 
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
 MODEL = 'DeepLab'
 BATCH_SIZE = 1
 ITER_SIZE = 1
-NUM_WORKERS = 2
+NUM_WORKERS = 1
 DATA_DIRECTORY = './data/GTA5'
 DATA_LIST_PATH = './dataset/gta5_list/train.txt'
 IGNORE_LABEL = 255
-INPUT_SIZE = '1280,720'
+#INPUT_SIZE = '1280,720'
+INPUT_SIZE = '1024,512'
 DATA_DIRECTORY_TARGET = './data/Cityscapes/data'
 DATA_LIST_PATH_TARGET = './dataset/cityscapes_list/train.txt'
 INPUT_SIZE_TARGET = '1024,512'
-INPUT_SIZE_TARGET = '1280,720'
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
 NUM_CLASSES = 19
@@ -61,6 +60,10 @@ GAN = 'Vanilla'
 
 TARGET = 'cityscapes'
 SET = 'train'
+
+RESTART = False
+RESTART_FROM = './snapshots/baseline_single_50_seg0.1_adv10.0002_adv20.001_bs1_11-10-8-20/'
+RESTART_ITER = 2
 
 
 def get_arguments():
@@ -142,11 +145,14 @@ def get_arguments():
                         help="choose adaptation set.")
     parser.add_argument("--gan", type=str, default=GAN,
                         help="choose the GAN objective.")
+    parser.add_argument("--restart_from", type = str, default = RESTART_FROM, help = 'restore a whole training')
+    parser.add_argument("--start_steps", type = int, default = 0, help = 'where to start the training')
+    
+    ###### record args #######
+
     return parser.parse_args()
 
-
 args = get_arguments()
-
 
 def lr_poly(base_lr, iter, max_iter, power):
     return base_lr * ((1 - float(iter) / max_iter) ** (power))
@@ -166,8 +172,39 @@ def adjust_learning_rate_D(optimizer, i_iter):
         optimizer.param_groups[1]['lr'] = lr * 10
 
 
+def generate_snapshot_name(args):
+
+    import datetime
+    now_time = datetime.datetime.now()
+    snapshot_dir = SNAPSHOT_DIR + 'baseline_' + 'multi_' \
+        + str(NUM_STEPS) + '_seg{}'.format(args.lambda_seg) + '_adv1{}'.format(args.lambda_adv_target1)\
+        + '_adv2{}'.format(args.lambda_adv_target2) + '_bs{}'.format(BATCH_SIZE) + \
+        '_{}-{}-{}-{}'.format(now_time.month, now_time.day, now_time.hour, now_time.minute)
+
+    return snapshot_dir
+
+
 def main():
+
     """Create the model and start the training."""
+    if RESTART:
+        args.snapshot_dir = RESTART_FROM
+    else:
+        args.snapshot_dir = generate_snapshot_name(args)
+
+    args_dict = vars(args)
+    import json
+
+    ###### load args for restart ######
+    if RESTART:
+        # pdb.set_trace()
+        args_dict_file = args.snapshot_dir + 'args_dict_{}.json'.format(RESTART_ITER)
+        with open(args_dict_file) as f:
+            args_dict_last = json.load(f)
+        for arg in args_dict:
+            args_dict[arg] = args_dict_last[arg]
+
+    ###### load args for restart ######
 
     device = torch.device("cuda" if not args.cpu else "cpu")
 
@@ -178,53 +215,22 @@ def main():
     input_size_target = (w, h)
 
     cudnn.enabled = True
-
-    # Create network
-    if args.model == 'DeepLab':
-        model = DeeplabMulti(num_classes=args.num_classes)
-        if args.restore_from[:4] == 'http' :
-            saved_state_dict = model_zoo.load_url(args.restore_from)
-        else:
-            saved_state_dict = torch.load(args.restore_from)
-
-        new_params = model.state_dict().copy()
-        for i in saved_state_dict:
-            # Scale.layer5.conv2d_list.3.weight
-            i_parts = i.split('.')
-            # print i_parts
-            if not args.num_classes == 19 or not i_parts[1] == 'layer5':
-                new_params['.'.join(i_parts[1:])] = saved_state_dict[i]
-                # print i_parts
-        model.load_state_dict(new_params)
-    # pdb.set_trace()
-    model.train()
-    model.to(device)
-
     cudnn.benchmark = True
-    # pdb.set_trace()
-    # init D
-    #TODO: uncomment
-    #model_D = FCDiscriminator(num_classes=args.num_classes).to(device)
-    model_D = FCDiscriminatorTest(num_classes=args.num_classes).to(device)
-    model_D.train()
-    """
-    model_D1 = FCDiscriminator(num_classes=args.num_classes).to(device)
-    model_D2 = FCDiscriminator(num_classes=args.num_classes).to(device)
 
-    model_D1.train()
-    model_D1.to(device)
+    if args.model == 'DeepLab':
+        #model = DeeplabMulti(num_classes=args.num_classes)
+        model = DeeplabMulti(num_classes=args.num_classes)
+        width = 1024
+        srcweight = 3
+        model = MDD(width=width, use_bottleneck=False, use_gpu=False, class_num=args.num_classes, srcweight=srcweight, args=args)
+    
+    model.c_net.base_network.to(device)
 
-    model_D2.train()
-    model_D2.to(device)
-    """
-    # pdb.set_trace()
-    # pdb.set_trace()
-    import datetime
-    now_time = datetime.datetime.now()
-    args.snapshot_dir = SNAPSHOT_DIR + 'baseline_' + 'multi_' \
-        + str(NUM_STEPS) + '_seg{}'.format(args.lambda_seg) + '_adv1{}'.format(args.lambda_adv_target1)\
-        + '_adv2{}'.format(args.lambda_adv_target2) + '_bs{}'.format(BATCH_SIZE) + \
-        '_{}-{}-{}-{}'.format(now_time.month, now_time.day, now_time.hour, now_time.minute)
+    #### From here, code should not be related to model reload ####
+    # but we would need hyperparameters: n_iter, 
+    # [lr, momentum, weight_decay, betas](these are all in args)
+    # args.snapshot_dir = generate_snapshot_name()
+
 
     if not os.path.exists(args.snapshot_dir):
         os.makedirs(args.snapshot_dir)
@@ -244,25 +250,19 @@ def main():
                                                      set=args.set),
                                    batch_size=args.batch_size, shuffle=True, num_workers=args.num_workers,
                                    pin_memory=True)
-
-
+    
+    # pdb.set_trace()
     targetloader_iter = enumerate(targetloader)
 
     # implement model.optim_parameters(args) to handle different models' lr setting
 
-    optimizer = optim.SGD(model.optim_parameters(args),
+    optimizer = optim.SGD(model.get_parameter_list(),
                           lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
     optimizer.zero_grad()
+    lr_scheduler = INVScheduler(gamma=0.001,
+                                decay_rate=0.75,
+                                init_lr=0.004)
 
-    optimizer_D = optim.Adam(model_D.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
-    optimizer_D.zero_grad()
-    """
-    optimizer_D1 = optim.Adam(model_D1.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
-    optimizer_D1.zero_grad()
-
-    optimizer_D2 = optim.Adam(model_D2.parameters(), lr=args.learning_rate_D, betas=(0.9, 0.99))
-    optimizer_D2.zero_grad()
-    """
 
     if args.gan == 'Vanilla':
         bce_loss = torch.nn.BCEWithLogitsLoss()
@@ -283,103 +283,51 @@ def main():
 
     writer = SummaryWriter(args.log_dir)
 
-    for i_iter in range(args.num_steps):
-        # pdb.set_trace()
+    for i_iter in range(args.start_steps, args.num_steps):
+
         loss_seg_value1 = 0
+        loss_adv_target_value1 = 0
+        loss_D_value1 = 0
+
         loss_seg_value2 = 0
+        loss_adv_target_value2 = 0
+        loss_D_value2 = 0
 
+        param_groups = model.get_parameter_list()
+        group_ratios = [group['lr'] for group in param_groups]
+        optimizer = lr_scheduler.next_optimizer(group_ratios, optimizer, i_iter/5)
         optimizer.zero_grad()
-        adjust_learning_rate(optimizer, i_iter)
-        optimizer_D.zero_grad()
-        adjust_learning_rate(optimizer_D, i_iter)
+        #adjust_learning_rate(optimizer, i_iter)
 
-        """
-        optimizer_D1.zero_grad()
-        optimizer_D2.zero_grad()
-        adjust_learning_rate_D(optimizer_D1, i_iter)
-        adjust_learning_rate_D(optimizer_D2, i_iter)
-        """
-
+        total_loss = 0
         for sub_i in range(args.iter_size):
-
-            # train G
-
-            # don't accumulate grads in D
-            for param in model_D.parameters():
-                param.requires_grad = False
-            """
-            for param in model_D1.parameters():
-                param.requires_grad = False
-
-            for param in model_D2.parameters():
-                param.requires_grad = False
-            """
 
             # train with source
 
             _, batch = trainloader_iter.__next__()
 
-            images, labels, _, _ = batch
-            images = images.to(device)
-            labels = labels.long().to(device)
-            # pdb.set_trace()
-            # images.size() == [1, 3, 720, 1280]
-            pred1, pred2 = model(images)
-            # pred1, pred2 size == [1, 19, 91, 161]
-            pred1 = interp(pred1)
-            pred2 = interp(pred2)
-            # size (1, 19, 720, 1280)
-            # pdb.set_trace()
-            loss_seg1 = seg_loss(pred1, labels)
-            loss_seg2 = seg_loss(pred2, labels)
-            loss = loss_seg2 + args.lambda_seg * loss_seg1
-            # pdb.set_trace()
-            # proper normalization
-            loss = loss / args.iter_size
-            # TODO: uncomment
-            loss.backward()
-            loss_seg_value1 += loss_seg1.item() / args.iter_size
-            loss_seg_value2 += loss_seg2.item() / args.iter_size
-            # pdb.set_trace()
-            # train with target
+            # load src
+            src_images, src_labels, _, _ = batch
+            src_images = src_images.to(device)
+            src_labels = src_labels.long().to(device)
 
+            # load target
             _, batch = targetloader_iter.__next__()
-            images, _, _ = batch
-            images = images.to(device)
-            # pdb.set_trace()
-            # images.size() == [1, 3, 720, 1280]
-            pred_target1, pred_target2 = model(images)
-            
-            # pred_target1, 2 == [1, 19, 91, 161]
-            pred_target1 = interp_target(pred_target1)
-            pred_target2 = interp_target(pred_target2)
-            # pred_target1, 2 == [1, 19, 720, 1280]
-            # pdb.set_trace()
-            features = torch.cat((pred1, pred_target1), dim=0)
-            outputs = torch.cat((pred2, pred_target2), dim=0)
-            softmax_out = nn.Softmax(dim=1)(outputs)
-            # features.size() == [2, 19, 720, 1280]
-            # softmax_out.size() == [2, 19, 720, 1280]
-            # pdb.set_trace()
-            transfer_loss = CDAN([features, softmax_out], model_D, None, None, random_layer=None)
-            # pdb.set_trace()
-            classifier_loss = nn.BCEWithLogitsLoss()(pred2, 
-                    torch.FloatTensor(pred2.data.size()).fill_(source_label).cuda())
-            total_loss = args.lambda_adv_target1 * transfer_loss + classifier_loss
-            total_loss.backward()
-            optimizer_D.step()
-            #TODO: normalize loss?
-            continue
+            tgt_images, _, _ = batch
+            tgt_images = tgt_images.to(device)
+
+            inputs = torch.cat((src_images, tgt_images), dim=0)
+
+            loss = model.get_loss(inputs, src_labels)
+            loss = loss / args.iter_size
+            loss.backward()
+            total_loss += loss.item()
+            print("loss", loss.item())
 
         optimizer.step()
-        optimizer_D.step()
 
         scalar_info = {
-            'loss_seg1': loss_seg_value1,
-            'loss_seg2': loss_seg_value2,
-            'tranfer loss': transfer_loss,
-            'classifier loss': classifier_loss,
-            'total loss': total_loss,
+            'loss': total_loss,
         }
 
         if i_iter % 10 == 0:
@@ -388,22 +336,43 @@ def main():
 
         print('exp = {}'.format(args.snapshot_dir))
         print(
-        'iter = {0:8d}/{1:8d}, loss_seg1 = {2:.3f} loss_seg2 = {3:.3f} transfer = {4:.3f}, classifier loss = {5:.3f} total loss = {6:.3f}'.format(
-            i_iter, args.num_steps, loss_seg_value1, loss_seg_value2, transfer_loss, classifier_loss, total_loss))
+        'iter = {0:8d}/{1:8d}, loss = {2:.3f}'.format(
+            i_iter, args.num_steps, total_loss))
 
         if i_iter >= args.num_steps_stop - 1:
             print('save model ...')
             torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '.pth'))
-            torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '_D.pth'))
             break
 
         if i_iter % args.save_pred_every == 0 and i_iter != 0:
             print('taking snapshot ...')
             torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '.pth'))
-            torch.save(model_D.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '_D1.pth'))
+
+            ###### also record latest saved iteration #######
+            args_dict['learning_rate'] = optimizer.param_groups[0]['lr']
+            args_dict['start_steps'] = i_iter 
+
+            args_dict_file = args.snapshot_dir + '/args_dict_{}.json'.format(i_iter)
+            with open(args_dict_file, 'w') as f:
+                json.dump(args_dict, f)
+
+            ###### also record latest saved iteration #######
 
     writer.close()
 
+class INVScheduler(object):
+    def __init__(self, gamma, decay_rate, init_lr=0.001):
+        self.gamma = gamma
+        self.decay_rate = decay_rate
+        self.init_lr = init_lr
+
+    def next_optimizer(self, group_ratios, optimizer, num_iter):
+        lr = self.init_lr * (1 + self.gamma * num_iter) ** (-self.decay_rate)
+        i=0
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = lr * group_ratios[i]
+            i+=1
+        return optimizer
 
 if __name__ == '__main__':
     main()

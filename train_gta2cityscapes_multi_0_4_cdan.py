@@ -539,7 +539,8 @@ def main():
             args_dict['learning_rate_D'] = optimizer_D.param_groups[0]['lr']
             args_dict['start_steps'] = i_iter 
 
-            args_dict_file = args.snapshot_dir + '/args_dict_{}.json'.format(i_iter)
+            args_dict_file = args.snapshot_dir + 'args_dict_{}.json'.format(i_iter)
+            pdb.set_trace()
             with open(args_dict_file, 'w') as f:
                 json.dump(args_dict, f)
 

@@ -40,13 +40,13 @@ INPUT_SIZE_TARGET = '1024,512'
 LEARNING_RATE = 2.5e-4
 MOMENTUM = 0.9
 NUM_CLASSES = 19
-NUM_STEPS = 50000
-NUM_STEPS_STOP = 50000  # early stopping
+NUM_STEPS = 5000
+NUM_STEPS_STOP = 5000  # early stopping
 POWER = 0.9
 RANDOM_SEED = 1234
 RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 SAVE_NUM_IMAGES = 2
-SAVE_PRED_EVERY = 2000
+SAVE_PRED_EVERY = 1000
 SNAPSHOT_DIR = './snapshots/'
 WEIGHT_DECAY = 0.0005
 LOG_DIR = './log'
@@ -310,7 +310,6 @@ def main():
     target_label = 1
 
     # set up tensor board
-    args.log_dir = args.snapshot_dir + '/log'
     if not os.path.exists(args.log_dir):
         os.makedirs(args.log_dir)
 
@@ -344,8 +343,7 @@ def main():
             images, labels, _, _ = batch
             images = images.to(device)
             labels = labels.long().to(device)
-            
-            pdb.set_trace()
+
             pred1, pred2 = model(images)
             pred1_interp = interp(pred1)
             pred2_interp = interp(pred2)
@@ -364,8 +362,7 @@ def main():
             images, _, _ = batch
             images = torch.from_numpy(skimage.transform.resize(images.numpy(), [1,3,720, 1280]))
             images = images.to(device)
-            
-            pdb.set_trace()
+
             _, pred_target2 = model(images)
             # pred_target2 = interp_target(pred_target2)
             pred_target2 = F.softmax(pred_target2)
