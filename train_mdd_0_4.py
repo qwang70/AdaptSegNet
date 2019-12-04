@@ -222,7 +222,7 @@ def main():
         model = DeeplabMulti(num_classes=args.num_classes)
         width = 1024
         srcweight = 3
-        model = MDD(width=width, use_bottleneck=False, use_gpu=False, class_num=args.num_classes, srcweight=srcweight, args=args)
+        model = MDD(width=width, use_bottleneck=False, use_gpu=True, class_num=args.num_classes, srcweight=srcweight, args=args)
     
     model.c_net.base_network.to(device)
 

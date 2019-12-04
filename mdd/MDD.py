@@ -33,7 +33,7 @@ class GradientReverseLayer(torch.autograd.Function):
 
 
 class MDDNet(nn.Module):
-    def __init__(self, base_net='ResNet18', use_bottleneck=True, bottleneck_dim=1024, width=1024, class_num=31, args=None):
+    def __init__(self, base_net='ResNet18', use_bottleneck=True, bottleneck_dim=1024, width=512, class_num=31, args=None):
         super(MDDNet, self).__init__()
         # TODO: check the effect of bottleneck dim and the width
         if not use_bottleneck:
@@ -136,7 +136,6 @@ class MDD(object):
         self.interp = nn.Upsample(size=(input_size[1], input_size[0]), mode='bilinear', align_corners=True)
 
     def get_loss(self, inputs, labels_source):
-        print(labels_source[0])
         class_criterion = nn.CrossEntropyLoss(ignore_index=255)
 
         _, outputs, _, outputs_adv = self.c_net(inputs)
