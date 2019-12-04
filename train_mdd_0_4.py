@@ -321,7 +321,6 @@ def main():
             loss = loss / args.iter_size
             loss.backward()
             total_loss += loss.item()
-            print("loss", loss.item())
 
         optimizer.step()
 
