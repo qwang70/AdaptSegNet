@@ -48,6 +48,7 @@ RANDOM_SEED = 1234
 RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/DeepLab_resnet_pretrained_init-f81d91e8.pth'
 SAVE_NUM_IMAGES = 2
 SAVE_PRED_EVERY = 5000
+#SAVE_PRED_EVERY = 1
 SNAPSHOT_DIR = './snapshots/'
 WEIGHT_DECAY = 0.0005
 LOG_DIR = './log'
@@ -339,12 +340,12 @@ def main():
 
         if i_iter >= args.num_steps_stop - 1:
             print('save model ...')
-            torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '.pth'))
+            torch.save(model.c_net.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(args.num_steps_stop) + '.pth'))
             break
 
         if i_iter % args.save_pred_every == 0 and i_iter != 0:
             print('taking snapshot ...')
-            torch.save(model.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '.pth'))
+            torch.save(model.c_net.state_dict(), osp.join(args.snapshot_dir, 'GTA5_' + str(i_iter) + '.pth'))
 
             ###### also record latest saved iteration #######
             args_dict['learning_rate'] = optimizer.param_groups[0]['lr']

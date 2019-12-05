@@ -14,24 +14,62 @@ RESTART_FROM = './snapshots/baseline_single_50_seg0.1_adv10.0002_adv20.001_bs1_1
 RESTART_ITER = 2
 
 class GradientReverseLayer(torch.autograd.Function):
+    iter_num = 0
+    alpha = 1.0
+    low_value = 0.0
+    high_value = 0.1
+    max_iter = 1000.0
+
     def __init__(self, iter_num=0, alpha=1.0, low_value=0.0, high_value=0.1, max_iter=1000.0):
+        GradientReverseLayer.iter_num = iter_num
+        GradientReverseLayer.alpha = alpha
+        GradientReverseLayer.low_value = low_value
+        GradientReverseLayer.high_value = high_value
+        GradientReverseLayer.max_iter = max_iter
+
+    @staticmethod
+    def forward(ctx, input):
+        try:
+            ctx.iter_num += 1
+        except:
+            ctx.iter_num = 1
+        print(ctx.iter_num)
+        output = input * 1.0
+        return output
+
+    @staticmethod
+    def backward(ctx, grad_output):
+        print("GradientReverseLayer, backward")
+        coeff = np.float(
+            2.0 * (GradientReverseLayer.high_value - GradientReverseLayer.low_value) / (1.0 + np.exp(-GradientReverseLayer.alpha * ctx.iter_num / GradientReverseLayer.max_iter)) - (
+                        GradientReverseLayer.high_value - GradientReverseLayer.low_value) + GradientReverseLayer.low_value)
+        return -coeff * grad_output
+
+"""
+class GradientReverseLayer(torch.autograd.Function):
+    def __init__(self, iter_num=0, alpha=1.0, low_value=0.0, high_value=0.1, max_iter=1000.0):
+        print("GradientReverseLayer, __init__")
         self.iter_num = iter_num
         self.alpha = alpha
         self.low_value = low_value
         self.high_value = high_value
         self.max_iter = max_iter
 
-    def forward(self, input):
-        self.iter_num += 1
+    @staticmethod
+    def forward(ctx, input):
+        print("GradientReverseLayer, forward")
+        #ctx.iter_num += 1
         output = input * 1.0
         return output
 
-    def backward(self, grad_output):
-        self.coeff = np.float(
-            2.0 * (self.high_value - self.low_value) / (1.0 + np.exp(-self.alpha * self.iter_num / self.max_iter)) - (
-                        self.high_value - self.low_value) + self.low_value)
-        return -self.coeff * grad_output
-
+    @staticmethod
+    def backward(ctx, grad_output):
+        print("GradientReverseLayer, backward")
+        ctx.coeff = np.float(
+            2.0 * (ctx.high_value - ctx.low_value) / (1.0 + np.exp(-ctx.alpha * ctx.iter_num / ctx.max_iter)) - (
+                        ctx.high_value - ctx.low_value) + ctx.low_value)
+        return -ctx.coeff * grad_output
+"""
 
 class MDDNet(nn.Module):
     def __init__(self, base_net='ResNet18', use_bottleneck=True, bottleneck_dim=1024, width=512, class_num=31, args=None):
@@ -115,11 +153,10 @@ class MDDNet(nn.Module):
         _, features = self.base_network(inputs) # (b, 3, w_small, h_small) # DeeplabMulti
         #features = self.base_network(inputs) # (b, 3, w_small, h_small) # Deeplab_VGG
 
-        pdb.set_trace()
         #features = features.permute(0,2,3,1) # (b, w, h, 19)
         #if self.use_bottleneck:
         #    features = self.bottleneck_layer(features)
-        features_adv = self.grl_layer(features)
+        features_adv = self.grl_layer.apply(features)
 
         #outputs_adv = self.classifier_layer_2(features_adv)
         outputs_adv = self.classifier2(features_adv)
@@ -155,7 +192,6 @@ class MDD(object):
         class_criterion = nn.CrossEntropyLoss(ignore_index=255)
 
         _, outputs, _, outputs_adv = self.c_net(inputs)
-        pdb.set_trace()
         outputs = self.interp(outputs)
         outputs_adv = self.interp(outputs_adv)
 
