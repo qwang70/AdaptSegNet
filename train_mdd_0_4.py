@@ -223,8 +223,9 @@ def main():
         width = 1024
         srcweight = 3
         model = MDD(width=width, use_bottleneck=False, use_gpu=not args.cpu, class_num=args.num_classes, srcweight=srcweight, args=args)
+        model.set_train()
     
-    model.c_net.base_network.to(device)
+    model.c_net.to(device)
 
     #### From here, code should not be related to model reload ####
     # but we would need hyperparameters: n_iter, 
@@ -258,7 +259,6 @@ def main():
 
     optimizer = optim.SGD(model.get_parameter_list(),
                           lr=args.learning_rate, momentum=args.momentum, weight_decay=args.weight_decay)
-    optimizer.zero_grad()
     lr_scheduler = INVScheduler(gamma=0.001,
                                 decay_rate=0.75,
                                 init_lr=0.004)
@@ -284,14 +284,6 @@ def main():
     writer = SummaryWriter(args.log_dir)
 
     for i_iter in range(args.start_steps, args.num_steps):
-
-        loss_seg_value1 = 0
-        loss_adv_target_value1 = 0
-        loss_D_value1 = 0
-
-        loss_seg_value2 = 0
-        loss_adv_target_value2 = 0
-        loss_D_value2 = 0
 
         param_groups = model.get_parameter_list()
         group_ratios = [group['lr'] for group in param_groups]
