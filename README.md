@@ -125,3 +125,6 @@ The model and code are available for non-commercial research purposes only.
 * 07/23/2018: update evaluation code for PyTorch 0.4
 * 06/04/2018: update pretrained VGG-16 model 
 * 02/2018: code released
+
+
+** For ground truth, the correct data name is "XXXX_labelIDs.png". But we need to do label mapping because it actually use the label covention in GTA5!!!!

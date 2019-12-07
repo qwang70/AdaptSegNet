@@ -39,10 +39,14 @@ class GradientReverseLayer(torch.autograd.Function):
 
     @staticmethod
     def backward(ctx, grad_output):
-        print("GradientReverseLayer, backward")
+        """
         coeff = np.float(
             2.0 * (GradientReverseLayer.high_value - GradientReverseLayer.low_value) / (1.0 + np.exp(-GradientReverseLayer.alpha * ctx.iter_num / GradientReverseLayer.max_iter)) - (
                         GradientReverseLayer.high_value - GradientReverseLayer.low_value) + GradientReverseLayer.low_value)
+        """
+        coeff= np.float(2/(1.0 + np.exp(-GradientReverseLayer.alpha)))-1
+        print("GRL coeff", coeff)
+
         return -coeff * grad_output
 
 """
