@@ -3,7 +3,6 @@ import scipy
 from scipy import ndimage
 import numpy as np
 import sys
-from packaging import version
 
 import torch
 from torch.autograd import Variable
@@ -17,20 +16,22 @@ from dataset.cityscapes_dataset import cityscapesDataSet
 from collections import OrderedDict
 import os
 from PIL import Image
+import pdb
+import torch.nn as nn
 from scipy.special import softmax
 
-import matplotlib.pyplot as plt
-import torch.nn as nn
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
 DATA_DIRECTORY = './data/Cityscapes/data'
-DATA_LIST_PATH = './dataset/cityscapes_list/val.txt'
-SAVE_PATH = './result/cityscapes'
+DATA_LIST_PATH = './dataset/cityscapes_list/val_debug.txt'
+# SAVE_PATH = './result/cityscapes'
+SAVE_PATH = './result/cityscapes_multi_class_group_triplecheck'
 
 IGNORE_LABEL = 255
 NUM_CLASSES = 19
 NUM_STEPS = 500 # Number of images in the validation set.
-RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35151c.pth'
+# RESTORE_FROM = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_multi-ed35151c.pth'
+RESTORE_FROM = '/project/AdaptSegNet/snapshots/multi_class_large50000_seg0.1_adv0.001_bs1_12-2-7-11/GTA5_48000.pth'
 RESTORE_FROM_VGG = 'http://vllab.ucmerced.edu/ytsai/CVPR18/GTA2Cityscapes_vgg-ac4ac9f6.pth'
 RESTORE_FROM_ORC = 'http://vllab1.ucmerced.edu/~whung/adaptSeg/cityscapes_oracle-b7b9934.pth'
 SET = 'val'
@@ -71,14 +72,14 @@ def get_arguments():
                         help="Number of classes to predict (including background).")
     parser.add_argument("--restore-from", type=str, default=RESTORE_FROM,
                         help="Where restore model parameters from.")
-    parser.add_argument("--restore-from-list", nargs='+', type=str, default=RESTORE_FROM,
-                        help="Where restore models parameters from.")
-    parser.add_argument("--gpu", type=int, default=0,
-                        help="choose gpu device.")
     parser.add_argument("--set", type=str, default=SET,
                         help="choose evaluation set.")
-    parser.add_argument("--save", type=str, default=save_path,
-                        help="path to save result.")
+    parser.add_argument("--save", type=str, default=SAVE_PATH,
+                        help="Path to save result.")
+    parser.add_argument("--cpu", action='store_true', help="choose to use cpu device.")
+
+    parser.add_argument("--restore-from-list", nargs='+', type=str, default=RESTORE_FROM,
+                        help="Where restore models parameters from.")
     parser.add_argument("--ensemble", type=str, default="avg",
                         help="Ensemble method.")
     parser.add_argument("--weight", nargs='+', type=float, default=None,
@@ -90,8 +91,6 @@ def main():
     """Create the model and start the evaluation process."""
 
     args = get_arguments()
-
-    gpu0 = args.gpu
 
     if not os.path.exists(args.save):
         os.makedirs(args.save)
@@ -121,31 +120,31 @@ def main():
         ###
         model.load_state_dict(saved_state_dict)
 
+        device = torch.device("cuda" if not args.cpu else "cpu")
+        model = model.to(device)
+
         model.eval()
-        model.cuda(gpu0)
 
         testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
                                         batch_size=1, shuffle=False, pin_memory=True)
 
-
-        if version.parse(torch.__version__) >= version.parse('0.4.0'):
-            interp = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)
-        else:
-            interp = nn.Upsample(size=(1024, 2048), mode='bilinear')
+        interp = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)
 
         for index, batch in enumerate(testloader):
             if index % 100 == 0:
-                print '%d processd' % index
+                print('%d processd' % index)
             image, _, name = batch
+            # pdb.set_trace()
+            image = image.to(device)
+
             if args.model == 'DeeplabMulti':
-                output1, output2 = model(Variable(image, volatile=True).cuda(gpu0))
+                output1, output2 = model(image)
                 output = interp(output2).cpu().data[0].numpy()
             elif args.model == 'DeeplabVGG' or args.model == 'Oracle':
-                output = model(Variable(image, volatile=True).cuda(gpu0))
+                output = model(image)
                 output = interp(output).cpu().data[0].numpy()
 
             output = output.transpose(1,2,0)
-
             # softmax output
                 output = softmax(output, axis=2)
             np.append(outputs, [output], axis=0)
