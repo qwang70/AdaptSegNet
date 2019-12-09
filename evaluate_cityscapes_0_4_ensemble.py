@@ -23,9 +23,9 @@ from scipy.special import softmax
 IMG_MEAN = np.array((104.00698793,116.66876762,122.67891434), dtype=np.float32)
 
 DATA_DIRECTORY = './data/Cityscapes/data'
-DATA_LIST_PATH = './dataset/cityscapes_list/val_debug.txt'
+DATA_LIST_PATH = './dataset/cityscapes_list/val.txt'
 # SAVE_PATH = './result/cityscapes'
-SAVE_PATH = './result/cityscapes_multi_class_group_triplecheck'
+SAVE_PATH = './result/cityscapes_test'
 
 IGNORE_LABEL = 255
 NUM_CLASSES = 19
@@ -83,7 +83,7 @@ def get_arguments():
     parser.add_argument("--ensemble", type=str, default="avg",
                         help="Ensemble method.")
     parser.add_argument("--weight", nargs='+', type=float, default=None,
-                        help="Ensemble method.")
+                        help="Weight for ensemble method 'avg'.")
     return parser.parse_args()
 
 
@@ -91,13 +91,18 @@ def main():
     """Create the model and start the evaluation process."""
 
     args = get_arguments()
+    args.save += '_{}'.format(args.ensemble)
 
     if not os.path.exists(args.save):
         os.makedirs(args.save)
+    device = torch.device("cuda" if not args.cpu else "cpu")
 
-    outputs = np.empty((1,1,1,1))
     for i in range(len(args.restore_from_list)):
         restore_from = args.restore_from_list[i]
+        print("Model {} {}".format(i, restore_from))
+        model_cls_prob_folder = '{}/{}'.format(args.save, restore_from)
+        if not os.path.exists(model_cls_prob_folder):
+            os.makedirs(model_cls_prob_folder)
         if args.model == 'DeeplabMulti':
             model = DeeplabMulti(num_classes=args.num_classes)
         elif args.model == 'Oracle':
@@ -120,7 +125,6 @@ def main():
         ###
         model.load_state_dict(saved_state_dict)
 
-        device = torch.device("cuda" if not args.cpu else "cpu")
         model = model.to(device)
 
         model.eval()
@@ -146,11 +150,32 @@ def main():
 
             output = output.transpose(1,2,0)
             # softmax output
-                output = softmax(output, axis=2)
-            np.append(outputs, [output], axis=0)
+            output = softmax(output, axis=2)
+            name = name[0].split('/')[-1]
+            model_cls_prob_file = '{}.npy'.format(name)
+            model_cls_prob_file_name = '{}/{}'.format(model_cls_prob_folder, model_cls_prob_file)
+            # save file
+            np.save(model_cls_prob_file_name, output)
 
+    testloader = data.DataLoader(cityscapesDataSet(args.data_dir, args.data_list, crop_size=(1024, 512), mean=IMG_MEAN, scale=False, mirror=False, set=args.set),
+                                    batch_size=1, shuffle=False, pin_memory=True)
+
+    interp = nn.Upsample(size=(1024, 2048), mode='bilinear', align_corners=True)
+
+    for index, batch in enumerate(testloader):
+        image, _, name = batch
+
+        name = name[0].split('/')[-1]
+        outputs = []
+        for restore_from in args.restore_from_list:
+            model_cls_prob_folder = '{}/{}'.format(args.save, restore_from)
+            model_cls_prob_file = '{}.npy'.format(name)
+            model_cls_prob_file_name = '{}/{}'.format(model_cls_prob_folder, model_cls_prob_file)
+            outputs.append(np.load(model_cls_prob_file_name))
+        outputs = np.stack(outputs, axis=0)
+        # load file
         if args.ensemble == "avg":
-            output = np.average(outputs, axis=0, weights=weight)
+            output = np.average(outputs, axis=0, weights=args.weight)
         elif args.ensemble == "max":
             output = np.amax(outputs, axis=0)
 
@@ -159,7 +184,6 @@ def main():
         output_col = colorize_mask(output)
         output = Image.fromarray(output)
 
-        name = name[0].split('/')[-1]
         output.save('%s/%s' % (args.save, name))
         output_col.save('%s/%s_color.png' % (args.save, name.split('.')[0]))
 
