@@ -22,7 +22,7 @@ from model.discriminator import FCDiscriminator
 from utils.loss import CrossEntropy2d
 from dataset.gta5_dataset import GTA5DataSet
 from dataset.cityscapes_dataset import cityscapesDataSet
-from mdd.MDD import MDD
+from mdd.MDD_resnet import MDD
 
 IMG_MEAN = np.array((104.00698793, 116.66876762, 122.67891434), dtype=np.float32)
 
@@ -223,7 +223,7 @@ def main():
         width = 1024
         srcweight = 3
         model = MDD(width=width, use_bottleneck=False, use_gpu=not args.cpu, class_num=args.num_classes, srcweight=srcweight, args=args)
-        model.set_train()
+        model.set_train(True)
     
     model.c_net.to(device)
 
